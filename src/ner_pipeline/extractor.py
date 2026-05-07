@@ -140,7 +140,7 @@ class TransformersExtractor:
                 pipeline,
             )
 
-            tokenizer = AutoTokenizer.from_pretrained(  # type: ignore[no-untyped-call]
+            tokenizer = AutoTokenizer.from_pretrained(  # type: ignore[no-untyped-call,unused-ignore]
                 self.model_name, revision=self.revision
             )
             model = AutoModelForTokenClassification.from_pretrained(
@@ -152,7 +152,7 @@ class TransformersExtractor:
             # sentence-internal positions — see ARCHITECTURE.md.
             # transformers' typed overloads don't expose the legacy ``"ner"``
             # task alias, but it is still supported at runtime.
-            self._pipe = pipeline(  # type: ignore[call-overload]
+            self._pipe = pipeline(  # type: ignore[call-overload,unused-ignore]
                 "ner",
                 model=model,
                 tokenizer=tokenizer,
