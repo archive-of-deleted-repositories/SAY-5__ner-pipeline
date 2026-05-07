@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import uuid
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -14,6 +15,10 @@ from sqlalchemy import text as sql_text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from ner_pipeline.calibration import (
+    CalibrationParams,
+    calibrated_confidence,
+)
 from ner_pipeline.db import get_sessionmaker
 from ner_pipeline.extractor import Extractor, TransformersExtractor
 from ner_pipeline.pipeline import ingest
@@ -30,6 +35,13 @@ logger = logging.getLogger(__name__)
 class IngestRequest(BaseModel):
     source: str = Field(..., min_length=1, max_length=255)
     text: str = Field(..., min_length=1)
+    raw_confidence: bool = Field(
+        default=False,
+        description=(
+            "When true, return the raw model softmax score on each mention "
+            "instead of the per-entity-type calibrated probability."
+        ),
+    )
 
 
 class MentionOut(BaseModel):
@@ -60,6 +72,7 @@ class ErrorEnvelope(BaseModel):
 
 
 _extractor_singleton: Extractor | None = None
+_calibration_singleton: CalibrationParams | None = None
 
 
 def _default_extractor() -> Extractor:
@@ -77,6 +90,21 @@ def _default_extractor() -> Extractor:
 def get_extractor() -> Extractor:
     """Dependency injection seam — tests override this with a MockExtractor."""
     return _default_extractor()
+
+
+_DEFAULT_CALIBRATION_PATH = Path("artifacts/calibration_platt.json")
+
+
+def _default_calibration() -> CalibrationParams | None:
+    global _calibration_singleton
+    if _calibration_singleton is None and _DEFAULT_CALIBRATION_PATH.exists():
+        _calibration_singleton = CalibrationParams.load(_DEFAULT_CALIBRATION_PATH)
+    return _calibration_singleton
+
+
+def get_calibration() -> CalibrationParams | None:
+    """Dependency seam for tests; returns None if no calibration is loaded."""
+    return _default_calibration()
 
 
 def get_session() -> Any:
@@ -163,27 +191,37 @@ def create_app(
         body: IngestRequest,
         session: Session = Depends(get_session),
         extractor: Extractor = Depends(get_extractor),
+        calibration: CalibrationParams | None = Depends(get_calibration),
     ) -> IngestResponse:
+        # When the caller asks for raw confidence, we explicitly skip the
+        # calibration step on the persisted side. Otherwise the persisted
+        # confidence is calibrated.
+        applied_cal = None if body.raw_confidence else calibration
         result = ingest(
             source=body.source,
             text=body.text,
             extractor=extractor,
             session=session,
+            calibration=applied_cal,
         )
         # Re-extract for the response payload only when we actually ingested
         # fresh; on idempotent hits we return an empty mentions list with the
         # existing count so callers can detect the no-op.
         if result.created:
-            mentions = [
-                MentionOut(
-                    surface_form=m.surface_form,
-                    char_start=m.char_start,
-                    char_end=m.char_end,
-                    entity_type=m.entity_type,
-                    confidence=m.confidence,
+            mentions = []
+            for m in extractor.extract(body.text):
+                conf = m.confidence
+                if applied_cal is not None:
+                    conf = calibrated_confidence(conf, m.entity_type, applied_cal)
+                mentions.append(
+                    MentionOut(
+                        surface_form=m.surface_form,
+                        char_start=m.char_start,
+                        char_end=m.char_end,
+                        entity_type=m.entity_type,
+                        confidence=conf,
+                    )
                 )
-                for m in extractor.extract(body.text)
-            ]
         else:
             mentions = []
         return IngestResponse(

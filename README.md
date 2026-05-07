@@ -61,6 +61,7 @@ input via `is_split_into_words=True`. The methodology trade-off is in
 |---|---|
 | `ner_pipeline.extractor` | `Extractor` Protocol; `TransformersExtractor` (real model); `MockExtractor` (tests). |
 | `ner_pipeline.onnx_extractor` | `OnnxExtractor` — same `Extractor` protocol, runs through `onnxruntime`. |
+| `ner_pipeline.calibration` | Per-entity-type Platt scaling for confidence calibration. |
 | `ner_pipeline.pipeline`  | `ingest()` — content-hash dedup, entity dedup, mention persistence. |
 | `ner_pipeline.models`    | SQLAlchemy ORM: `Document`, `Entity`, `EntityMention`. |
 | `ner_pipeline.api`       | FastAPI: `POST /v1/ingest`, `/healthz`, error envelope. |
@@ -112,7 +113,7 @@ curl -X POST http://localhost:8000/v1/ingest \
 
 | Suite | Count | Default | Gate |
 |---|---:|---|---|
-| Unit (`tests/unit/`)            | 56 | always | `pytest tests/unit` |
+| Unit (`tests/unit/`)            | 87 | always | `pytest tests/unit` |
 | Integration (`tests/integration/`) |  5 | gated  | `RUN_INTEGRATION=1` (CI sets this; needs Postgres) |
 | Eval-smoke (`tests/eval/`)       |  1 | gated  | `RUN_EVAL_SMOKE=1` (CI runs in its own job) |
 
@@ -158,6 +159,41 @@ bench/               # ingest_bench.py + results/baseline_10k.json
 tests/{unit,integration,eval}/
 eval/baselines/      # committed metrics from real runs
 .github/workflows/   # ci.yml: lint, typecheck, test (3.11+3.12), eval-smoke, bench-smoke, build
+```
+
+## Confidence calibration (Platt scaling)
+
+HuggingFace NER returns the softmax score of the predicted label, which
+is **not** a probability — token-classification heads are systematically
+over-confident on in-distribution inputs and under-confident on out-of-
+distribution ones. `ner_pipeline.calibration` fits a per-entity-type
+1-D Platt sigmoid `p_calibrated = sigmoid(a * logit(p_raw) + b)` on the
+CoNLL-2003 train split; the parameters are committed at
+[`artifacts/calibration_platt.json`](artifacts/calibration_platt.json).
+
+`Pipeline.ingest(calibration=...)` applies the scaler before persisting,
+so `EntityMention.confidence` is the calibrated probability. Pass
+`raw_confidence: true` on the `POST /v1/ingest` body to get the raw
+softmax score back (back-compat for callers that depend on it).
+
+Brier score before vs. after on the committed held-out 1 201-prediction
+split (lower is better; see
+[`artifacts/calibration_brier.json`](artifacts/calibration_brier.json)):
+
+| Type | Brier raw | Brier calibrated | n |
+|---|---:|---:|---:|
+| LOC     | 0.0144 | 0.0143 | 422 |
+| MISC    | 0.0367 | 0.0406 | 202 |
+| ORG     | 0.0491 | 0.0489 | 217 |
+| PER     | 0.1627 | 0.1488 | 360 |
+| **Overall** | **0.0689** | **0.0653** | 1 201 |
+
+Reproduce with:
+
+```bash
+python scripts/calibrate.py --limit 2000 \
+    --out-params artifacts/calibration_platt.json \
+    --out-brier  artifacts/calibration_brier.json
 ```
 
 ## ONNX deployment story

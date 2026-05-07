@@ -63,8 +63,12 @@ data/
 # Project: timestamped eval results (baselines committed separately)
 eval/results/
 
-# Project: ONNX export + bench timestamped results
-artifacts/
+# Project: ONNX export weights + bench timestamped results
+# (calibration parameters are committed; ONNX weights are not)
+artifacts/*.onnx
+artifacts/*.onnx.data
+artifacts/*.meta.json
+artifacts/parity_report.json
 bench/results/2*.json
 
 # Env files

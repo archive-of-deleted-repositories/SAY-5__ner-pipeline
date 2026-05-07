@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ner_pipeline.calibration import CalibrationParams, calibrated_confidence
 from ner_pipeline.extractor import Extractor, Mention
 from ner_pipeline.models import Document, Entity, EntityMention
 
@@ -55,11 +56,16 @@ def ingest(
     text: str,
     extractor: Extractor,
     session: Session,
+    calibration: CalibrationParams | None = None,
 ) -> IngestResult:
     """Ingest ``text`` into the database.
 
     Idempotent on ``content_sha256``: a second call with the same text returns
     the existing document and does **not** rewrite mentions.
+
+    If ``calibration`` is provided, the persisted ``EntityMention.confidence``
+    is the **calibrated** probability under per-entity-type Platt scaling.
+    Pass ``calibration=None`` to keep the raw model score (back-compat).
     """
     digest = content_sha256(text)
     existing = session.execute(
@@ -79,7 +85,17 @@ def ingest(
     session.add(doc)
     session.flush()
 
-    mentions: list[Mention] = extractor.extract(text)
+    raw_mentions: list[Mention] = extractor.extract(text)
+    if calibration is not None:
+        mentions = [
+            replace(
+                m,
+                confidence=calibrated_confidence(m.confidence, m.entity_type, calibration),
+            )
+            for m in raw_mentions
+        ]
+    else:
+        mentions = raw_mentions
 
     # Dedup mentions by (canonical, type) within the document so we issue one
     # entity row per unique pair, but every char-span gets its own mention row.

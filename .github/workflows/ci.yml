@@ -190,6 +190,41 @@ jobs:
           TRANSFORMERS_VERBOSITY: error
         run: pytest tests/eval/test_onnx_parity_smoke.py -v -s
 
+  calibrate-smoke:
+    name: calibrate-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: cache HF Hub
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-dslim-distilbert-ner-conll2003-v2
+          restore-keys: |
+            hf-dslim-distilbert-ner-
+      - name: install
+        run: |
+          pip install --upgrade pip
+          pip install \
+            "torch>=2.2,<3.0" --index-url https://download.pytorch.org/whl/cpu
+          pip install \
+            "transformers>=4.40,<5.0" "datasets>=2.18,<3.0" \
+            "sqlalchemy>=2.0,<3.0" "pydantic>=2.5,<3.0" "pydantic-settings>=2.2,<3.0" \
+            "fastapi>=0.110,<1.0" "alembic>=1.13,<2.0" \
+            "psycopg[binary]>=3.1,<4.0" structlog prometheus-client \
+            "seqeval>=1.2,<2.0" pytest httpx
+      - name: run calibration smoke (200 sentences)
+        env:
+          RUN_EVAL_SMOKE: "1"
+          HF_HUB_DISABLE_TELEMETRY: "1"
+          TRANSFORMERS_VERBOSITY: error
+        run: pytest tests/eval/test_calibration_smoke.py -v -s
+
   build:
     name: build
     runs-on: ubuntu-latest
