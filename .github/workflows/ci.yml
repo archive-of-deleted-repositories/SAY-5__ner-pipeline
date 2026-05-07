@@ -91,6 +91,32 @@ jobs:
       - name: integration tests
         run: pytest tests/integration -v
 
+  bench-smoke:
+    name: bench-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: install
+        run: |
+          pip install --upgrade pip
+          pip install \
+            "sqlalchemy>=2.0,<3.0" "pydantic>=2.5,<3.0" "pydantic-settings>=2.2,<3.0" \
+            "fastapi>=0.110,<1.0" "alembic>=1.13,<2.0" \
+            "psycopg[binary]>=3.1,<4.0" structlog prometheus-client \
+            "faker>=24.0,<26.0"
+      - name: bench-regress (200 docs, n+1 + perf gate)
+        run: |
+          PYTHONPATH=src python bench/ingest_bench.py \
+            --n-docs 200 \
+            --fail-on-n-plus-one \
+            --regress-baseline bench/results/baseline_10k.json \
+            --regress-tolerance 0.50
+
   eval-smoke:
     name: eval-smoke
     runs-on: ubuntu-latest

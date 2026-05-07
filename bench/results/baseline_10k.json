@@ -1,0 +1,18 @@
+{
+  "db_query_count_per_doc_max": 17,
+  "db_query_count_per_doc_mean": 12.365,
+  "db_query_count_total": 123650,
+  "db_url": "sqlite:///:memory:",
+  "docs_per_sec": 612.0460392293503,
+  "has_n_plus_one": false,
+  "latency_ms_p50": 1.523124985396862,
+  "latency_ms_p95": 2.3025437607429917,
+  "latency_ms_p99": 3.5677496570860976,
+  "mentions_per_doc_mean": 3.8007,
+  "mentions_total": 38007,
+  "n_docs": 10000,
+  "peak_rss_mb": 75.828125,
+  "seed": 42,
+  "timestamp": "2026-05-07T22:02:48.688993+00:00",
+  "total_seconds": 16.33864016601001
+}

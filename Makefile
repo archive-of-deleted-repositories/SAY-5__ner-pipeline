@@ -1,4 +1,4 @@
-.PHONY: help install dev migrate seed test lint typecheck eval eval-smoke serve up down build clean
+.PHONY: help install dev migrate seed test lint typecheck eval eval-smoke serve up down build clean bench bench-smoke bench-regress
 
 PY ?= python
 PIP ?= pip
@@ -81,3 +81,14 @@ build:
 clean:
 	rm -rf .pytest_cache .mypy_cache .ruff_cache .coverage htmlcov build dist *.egg-info
 	find . -type d -name __pycache__ -exec rm -rf {} +
+
+bench:
+	PYTHONPATH=src $(PY) bench/ingest_bench.py --n-docs 10000 --fail-on-n-plus-one
+
+bench-smoke:
+	PYTHONPATH=src $(PY) bench/ingest_bench.py --n-docs 200 --fail-on-n-plus-one
+
+bench-regress:
+	PYTHONPATH=src $(PY) bench/ingest_bench.py --n-docs 200 --fail-on-n-plus-one \
+		--regress-baseline bench/results/baseline_10k.json \
+		--regress-tolerance 0.50

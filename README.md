@@ -111,11 +111,41 @@ curl -X POST http://localhost:8000/v1/ingest \
 
 | Suite | Count | Default | Gate |
 |---|---:|---|---|
-| Unit (`tests/unit/`)            | 42 | always | `pytest tests/unit` |
+| Unit (`tests/unit/`)            | 56 | always | `pytest tests/unit` |
 | Integration (`tests/integration/`) |  5 | gated  | `RUN_INTEGRATION=1` (CI sets this; needs Postgres) |
 | Eval-smoke (`tests/eval/`)       |  1 | gated  | `RUN_EVAL_SMOKE=1` (CI runs in its own job) |
 
-Coverage gate: 80% on `src/ner_pipeline/` (current: 86%).
+Coverage gate: 85% on `src/ner_pipeline/` (current: 86%).
+Property tests under `tests/unit/test_property_extractor.py` cover unicode /
+mixed-script / whitespace-only / empty / very-long inputs, char-offset
+roundtrips, and entity-dedup invariants under repeated insertion.
+
+## Bench
+
+A 10 000-doc synthetic ingest bench lives in `bench/ingest_bench.py`. It
+times the full pipeline (text → extractor → mention dedup → write) against
+in-memory SQLite, records `docs/sec`, latency P50/P95/P99 per doc, peak RSS,
+and the SQL-statement count per doc, and writes the result to
+`bench/results/<timestamp>.json`.
+
+Latest committed baseline (`bench/results/baseline_10k.json`,
+SQLite in-memory, M-series CPU):
+
+| Metric | Value |
+|---|---:|
+| docs/sec                  | **612** |
+| mentions/doc (mean)       | 3.80 |
+| latency P50 (ms)          | 1.5 |
+| latency P95 (ms)          | 2.3 |
+| latency P99 (ms)          | 3.6 |
+| peak RSS (MB)             | 76 |
+| SQL stmts / doc (mean)    | 12.4 |
+| SQL stmts / doc (max)     | 17 |
+| N+1 detected              | no |
+
+CI runs `bench-smoke` against 200 docs and asserts both the N+1 budget
+(`queries / mentions <= 4`) and a 50%-tolerance perf-regress gate against the
+committed baseline. `make bench-regress` runs the same gate locally.
 
 ## Layout
 
@@ -123,9 +153,10 @@ Coverage gate: 80% on `src/ner_pipeline/` (current: 86%).
 src/ner_pipeline/    # package
 alembic/             # migrations (0001_initial_schema)
 scripts/             # eval_conll.py, seed.py
+bench/               # ingest_bench.py + results/baseline_10k.json
 tests/{unit,integration,eval}/
 eval/baselines/      # committed metrics from real runs
-.github/workflows/   # ci.yml: lint, typecheck, test (3.11+3.12), eval-smoke, build
+.github/workflows/   # ci.yml: lint, typecheck, test (3.11+3.12), eval-smoke, bench-smoke, build
 ```
 
 ## What this is *not*
