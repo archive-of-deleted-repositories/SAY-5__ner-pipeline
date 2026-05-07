@@ -29,7 +29,7 @@ install dev:
 		torch transformers datasets fastapi "uvicorn[standard]" \
 		"sqlalchemy>=2" alembic "psycopg[binary]" pydantic pydantic-settings \
 		structlog prometheus-client faker seqeval \
-		pytest pytest-asyncio pytest-cov factory-boy ruff black mypy httpx \
+		pytest pytest-asyncio pytest-cov factory-boy hypothesis ruff black mypy httpx \
 		"testcontainers[postgres]"
 
 up:
@@ -50,7 +50,7 @@ else
 endif
 
 test:
-	pytest tests/unit -v --cov=src/ner_pipeline --cov-report=term-missing --cov-fail-under=80
+	pytest tests/unit -v --cov=src/ner_pipeline --cov-report=term-missing --cov-fail-under=85
 
 test-int:
 	RUN_INTEGRATION=1 pytest tests/integration -v
