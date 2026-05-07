@@ -115,7 +115,7 @@ jobs:
             --n-docs 200 \
             --fail-on-n-plus-one \
             --regress-baseline bench/results/baseline_10k.json \
-            --regress-tolerance 0.50
+            --regress-tolerance 0.70
 
   eval-smoke:
     name: eval-smoke

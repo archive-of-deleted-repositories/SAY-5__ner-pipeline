@@ -85,6 +85,7 @@ module = [
     "onnxruntime.*",
     "onnx.*",
     "onnxscript.*",
+    "numpy.*",
 ]
 ignore_missing_imports = true
 
