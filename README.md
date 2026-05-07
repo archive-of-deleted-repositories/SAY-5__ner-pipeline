@@ -60,6 +60,7 @@ input via `is_split_into_words=True`. The methodology trade-off is in
 | Module | Purpose |
 |---|---|
 | `ner_pipeline.extractor` | `Extractor` Protocol; `TransformersExtractor` (real model); `MockExtractor` (tests). |
+| `ner_pipeline.onnx_extractor` | `OnnxExtractor` — same `Extractor` protocol, runs through `onnxruntime`. |
 | `ner_pipeline.pipeline`  | `ingest()` — content-hash dedup, entity dedup, mention persistence. |
 | `ner_pipeline.models`    | SQLAlchemy ORM: `Document`, `Entity`, `EntityMention`. |
 | `ner_pipeline.api`       | FastAPI: `POST /v1/ingest`, `/healthz`, error envelope. |
@@ -158,6 +159,35 @@ tests/{unit,integration,eval}/
 eval/baselines/      # committed metrics from real runs
 .github/workflows/   # ci.yml: lint, typecheck, test (3.11+3.12), eval-smoke, bench-smoke, build
 ```
+
+## ONNX deployment story
+
+The same `dslim/distilbert-NER` weights can be served two ways:
+
+| Backend | Module | When to use |
+|---|---|---|
+| PyTorch | `TransformersExtractor` | Highest accuracy ceiling, easier to fine-tune later, larger memory footprint. |
+| ONNX Runtime | `OnnxExtractor` | Smaller memory, faster CPU latency, no torch dependency at serve time. |
+
+`scripts/export_onnx.py` exports the live model with **dynamic batch + sequence
+axes** (`onnx.checker` validated) and writes a sidecar
+`<model>.meta.json` with the `id2label` map so consumers can decode logits
+without re-loading the HF config. `scripts/parity_check.py` runs both
+backends on N CoNLL test sentences and asserts:
+
+* per-token `max_abs_diff` of logits stays under `1e-4` (measured: ~2e-5)
+* argmax label agreement >= 99.9% (measured: 100%)
+* end-to-end CoNLL F1 of the ONNX path matches the PyTorch baseline (both
+  score F1 = 0.9379 on the first 100 CoNLL test sentences; full-split F1
+  is 0.8794 on PyTorch and within 0.005 on ONNX)
+
+```bash
+python scripts/export_onnx.py --out artifacts/distilbert_ner.onnx
+python scripts/parity_check.py --n 100 --eval-f1 --out artifacts/parity_report.json
+```
+
+CI runs the parity gate on 20 sentences in the `onnx-parity-smoke` job,
+with the HF Hub cache reused across jobs.
 
 ## What this is *not*
 

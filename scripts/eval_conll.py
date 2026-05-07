@@ -13,14 +13,16 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from ner_pipeline.eval import evaluate
 from ner_pipeline.extractor import TransformersExtractor
 
 
-def load_conll_test(split: str = "test", limit: int | None = None) -> tuple[list[list[str]], list[list[int]]]:
+def load_conll_test(
+    split: str = "test", limit: int | None = None
+) -> tuple[list[list[str]], list[list[int]]]:
     """Load the CoNLL-2003 split via the ``datasets`` library.
 
     Tries the modern dataset id first, then falls back to the legacy one.
@@ -32,14 +34,12 @@ def load_conll_test(split: str = "test", limit: int | None = None) -> tuple[list
         try:
             ds = load_dataset(dataset_id, split=split, trust_remote_code=True)
             break
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             last_err = exc
             ds = None
             continue
     if ds is None:
-        raise RuntimeError(
-            f"could not load CoNLL-2003 split '{split}': {last_err}"
-        )
+        raise RuntimeError(f"could not load CoNLL-2003 split '{split}': {last_err}")
 
     tokens: list[list[str]] = []
     tags: list[list[int]] = []
@@ -96,7 +96,7 @@ def main() -> int:
 
     out_path = args.output
     if out_path is None:
-        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
         out_path = f"eval/results/{ts}.json"
 
     payload = {
@@ -105,7 +105,7 @@ def main() -> int:
         "split": args.split,
         "limit": args.limit,
         "sentences_evaluated": len(sentences),
-        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "timestamp_utc": datetime.now(UTC).isoformat(),
         "metrics": result.to_json(),
     }
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)

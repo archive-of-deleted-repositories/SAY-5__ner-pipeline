@@ -63,6 +63,10 @@ data/
 # Project: timestamped eval results (baselines committed separately)
 eval/results/
 
+# Project: ONNX export + bench timestamped results
+artifacts/
+bench/results/2*.json
+
 # Env files
 .env
 .env.local

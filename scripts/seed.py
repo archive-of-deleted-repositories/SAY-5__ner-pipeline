@@ -11,7 +11,6 @@ from ner_pipeline.db import session_scope
 from ner_pipeline.extractor import TransformersExtractor
 from ner_pipeline.pipeline import ingest
 
-
 TEMPLATES: tuple[str, ...] = (
     "{person} announced a new partnership between {org} and {org2} from offices in {city}, {country}.",
     "Authorities in {city} confirmed that {person} will lead {org}'s expansion across {country}.",
